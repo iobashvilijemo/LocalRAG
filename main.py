@@ -1,9 +1,13 @@
 import os
 import tempfile
+import time
 import streamlit as st
 from embedchain import App
 import base64
 from streamlit_chat import message
+
+
+
 
 def embedchain_bot(db_path):
 
@@ -33,10 +37,15 @@ def display_pdf(file):
 st.title("Chat with PDF using Embedchain")
 st.caption("Upload a PDF file to start analyzing it with LLM.")
 
-db_path = tempfile.mkdtemp()
+
+db_path = os.path.join(os.getcwd(), "chroma_db")
+
+os.makedirs(db_path, exist_ok=True)
 st.write(f"Using temporary directory for database: {db_path}")
 
 
+if 'app' not in st.session_state:
+    st.session_state.app = embedchain_bot(db_path)
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
@@ -50,16 +59,17 @@ with st.sidebar:
         display_pdf(pdf_file)
 
 
-if st.button("Process PDF"):
+if st.button("Process PDF") and pdf_file:
     with st.spinner("Processing PDF..."):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
             temp_file.write(pdf_file.getvalue())
-            if 'app' not in st.session_state:
-                st.session_state.app = embedchain_bot(db_path)
+            temp_file.flush()
+            st.session_state.app.db.reset()
             st.session_state.app.add(temp_file.name)
             
-        os.remove(temp_file.name)
-        st.success("PDF processed successfully!")
+    st.success("PDF processed successfully!")
+    time.sleep(1)
+    os.remove(temp_file.name)
 
 
 for i, msg in enumerate(st.session_state.messages):
@@ -71,12 +81,11 @@ if prompt := st.chat_input("Ask a question about the PDF"):
     message(prompt, is_user=True)
 
 
-with st.spinner("Generating response..."):
-    if 'app' not in st.session_state:
-        st.session_state.app = embedchain_bot(db_path)
-    response = st.session_state.app.chat(prompt)
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    message(response)
+    with st.spinner("Generating response..."):
+        response = st.session_state.app.chat(prompt)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        message(response)
 
 if st.button("Clear Chat"):
     st.session_state.messages = []
+    st.rerun()
