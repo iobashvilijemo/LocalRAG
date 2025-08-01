@@ -1,3 +1,5 @@
-
+venv/
 RAG/
 chroma_db/
+.vscode/
+.mypy_cache/
